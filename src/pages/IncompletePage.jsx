@@ -1,16 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import * as Tabs from '@radix-ui/react-tabs';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { fetchDashboard } from '../api/dashboardApi.js';
 import { fetchEmployeeTrainingStatuses, updateTrainingCompletion } from '../api/employeeTrainingApi.js';
 import { fetchIncompleteTrainings } from '../api/trainingApi.js';
+import CourseIncompleteDetail from '../components/CourseIncompleteDetail.jsx';
 import EmployeeTrainingPanel from '../components/EmployeeTrainingPanel.jsx';
 import EmptyView from '../components/EmptyView.jsx';
 import ErrorView from '../components/ErrorView.jsx';
 import LoadingView from '../components/LoadingView.jsx';
+import { queryKeys } from '../queryClient.js';
 
 const COURSE_PAGE_SIZE = 5;
 const EMPLOYEE_PAGE_SIZE = 5;
 
 function safeNumber(value) {
   return value ?? 0;
+}
+
+function clampPercentage(value) {
+  return Math.min(100, Math.max(0, safeNumber(value)));
 }
 
 function displayTarget(value) {
@@ -22,101 +34,114 @@ function displayRequired(required) {
 }
 
 export default function IncompletePage() {
-  const [results, setResults] = useState([]);
-  const [employeeTrainingStatuses, setEmployeeTrainingStatuses] = useState([]);
+  const courseDrawerTriggerRef = useRef(null);
+  const savingKeysRef = useRef(new Set());
+  const tabsListRef = useRef(null);
+  const tabTriggerRefs = useRef({});
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedView = searchParams.get('view');
+  const activeView = requestedView === 'employee' ? 'employee' : 'course';
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [courseTitleQuery, setCourseTitleQuery] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
   const [coursePage, setCoursePage] = useState(1);
   const [employeePage, setEmployeePage] = useState(1);
   const [employeePanelPage, setEmployeePanelPage] = useState(1);
-  const [updatingKey, setUpdatingKey] = useState(null);
+  const [isCourseDrawerOpen, setIsCourseDrawerOpen] = useState(false);
+  const [savingKeys, setSavingKeys] = useState(() => new Set());
   const [updateError, setUpdateError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0, ready: false });
 
-  async function loadPageData({ resetSelection = false } = {}) {
-    try {
-      setIsLoading(true);
-      setError(null);
-      setUpdateError('');
+  const incompleteQuery = useQuery({
+    queryKey: queryKeys.incompleteTrainings,
+    queryFn: fetchIncompleteTrainings,
+  });
+  const employeeTrainingQuery = useQuery({
+    queryKey: queryKeys.employeeTrainingStatuses,
+    queryFn: fetchEmployeeTrainingStatuses,
+  });
+  const completionMutation = useMutation({ mutationFn: updateTrainingCompletion });
+  const results = Array.isArray(incompleteQuery.data?.results) ? incompleteQuery.data.results : [];
+  const employeeTrainingStatuses = Array.isArray(employeeTrainingQuery.data?.results)
+    ? employeeTrainingQuery.data.results
+    : [];
+  const isRefreshing = incompleteQuery.isFetching && !incompleteQuery.isPending;
 
-      const [incompleteData, employeeTrainingData] = await Promise.all([
-        fetchIncompleteTrainings(),
-        fetchEmployeeTrainingStatuses(),
-      ]);
-      const nextResults = Array.isArray(incompleteData?.results) ? incompleteData.results : [];
-      const nextEmployeeTrainingStatuses = Array.isArray(employeeTrainingData?.results)
-        ? employeeTrainingData.results
-        : [];
-
-      setResults(nextResults);
-      setEmployeeTrainingStatuses(nextEmployeeTrainingStatuses);
-
-      if (resetSelection) {
-        setSelectedCourseId(nextResults[0]?.courseId ?? null);
-        setCoursePage(1);
-        setEmployeePage(1);
-        setEmployeePanelPage(1);
+  useLayoutEffect(() => {
+    function updateTabIndicator() {
+      const activeTrigger = tabTriggerRefs.current[activeView];
+      const tabsList = tabsListRef.current;
+      if (!activeTrigger || !tabsList) {
+        return;
       }
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setIsLoading(false);
+
+      const activeTriggerRect = activeTrigger.getBoundingClientRect();
+      const tabsListRect = tabsList.getBoundingClientRect();
+      const nextIndicator = {
+        left: activeTriggerRect.left - tabsListRect.left + tabsList.scrollLeft,
+        width: activeTriggerRect.width,
+        ready: true,
+      };
+      setTabIndicator((currentIndicator) => (
+        currentIndicator.ready &&
+        currentIndicator.left === nextIndicator.left &&
+        currentIndicator.width === nextIndicator.width
+          ? currentIndicator
+          : nextIndicator
+      ));
     }
-  }
 
-  useEffect(() => {
-    loadPageData({ resetSelection: true });
-  }, []);
-
-  const departments = useMemo(() => {
-    const departmentSet = new Set();
-
-    results.forEach((course) => {
-      if (course.targetDepartment && course.targetDepartment !== 'ALL') {
-        departmentSet.add(course.targetDepartment);
+    updateTabIndicator();
+    window.addEventListener('resize', updateTabIndicator);
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateTabIndicator);
+    if (tabsListRef.current) {
+      resizeObserver?.observe(tabsListRef.current);
+    }
+    Object.values(tabTriggerRefs.current).forEach((trigger) => {
+      if (trigger) {
+        resizeObserver?.observe(trigger);
       }
-      course.employees?.forEach((employee) => {
-        if (employee.department) {
-          departmentSet.add(employee.department);
-        }
-      });
     });
-    return [...departmentSet].sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [results]);
+
+    return () => {
+      window.removeEventListener('resize', updateTabIndicator);
+      resizeObserver?.disconnect();
+    };
+  }, [activeView]);
 
   const filteredResults = useMemo(() => {
     const normalizedTitleQuery = courseTitleQuery.trim().toLowerCase();
 
-    return results.filter((course) => {
-      const matchesCourseTitle =
-        normalizedTitleQuery === '' || course.courseTitle?.toLowerCase().includes(normalizedTitleQuery);
-
-      const matchesDepartment =
-        departmentFilter === '' ||
-        course.targetDepartment === departmentFilter ||
-        course.targetDepartment === 'ALL' ||
-        course.employees?.some((employee) => employee.department === departmentFilter);
-
-      return matchesCourseTitle && matchesDepartment;
-    });
-  }, [courseTitleQuery, departmentFilter, results]);
+    return results.filter((course) => (
+      normalizedTitleQuery === '' || course.courseTitle?.toLowerCase().includes(normalizedTitleQuery)
+    ));
+  }, [courseTitleQuery, results]);
 
   useEffect(() => {
     setCoursePage(1);
-  }, [courseTitleQuery, departmentFilter]);
+  }, [courseTitleQuery]);
 
   useEffect(() => {
     if (filteredResults.length === 0) {
       setSelectedCourseId(null);
+      setIsCourseDrawerOpen(false);
       return;
     }
-    const selectedCourseExists = filteredResults.some((course) => course.courseId === selectedCourseId);
-    if (!selectedCourseExists) {
-      setSelectedCourseId(filteredResults[0].courseId);
+    if (selectedCourseId !== null) {
+      const selectedCourseExists = filteredResults.some((course) => course.courseId === selectedCourseId);
+      if (!selectedCourseExists) {
+        setSelectedCourseId(null);
+        setIsCourseDrawerOpen(false);
+      }
     }
   }, [filteredResults, selectedCourseId]);
+
+  useEffect(() => {
+    if (activeView !== 'course') {
+      setIsCourseDrawerOpen(false);
+    }
+  }, [activeView]);
 
   useEffect(() => {
     setEmployeePage(1);
@@ -127,6 +152,7 @@ export default function IncompletePage() {
   const courseStartIndex = (currentCoursePage - 1) * COURSE_PAGE_SIZE;
   const pagedCourses = filteredResults.slice(courseStartIndex, courseStartIndex + COURSE_PAGE_SIZE);
   const courseEndIndex = courseStartIndex + pagedCourses.length;
+  const courseRangeStart = pagedCourses.length > 0 ? courseStartIndex + 1 : 0;
 
   const selectedCourse = filteredResults.find((course) => course.courseId === selectedCourseId) ?? null;
   const selectedEmployees = Array.isArray(selectedCourse?.employees) ? selectedCourse.employees : [];
@@ -136,217 +162,386 @@ export default function IncompletePage() {
   const pagedEmployees = selectedEmployees.slice(employeeStartIndex, employeeStartIndex + EMPLOYEE_PAGE_SIZE);
   const employeeEndIndex = employeeStartIndex + pagedEmployees.length;
 
+  function handleViewChange(nextView) {
+    if (nextView !== 'course') {
+      setIsCourseDrawerOpen(false);
+    }
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('view', nextView);
+    setSearchParams(nextSearchParams);
+  }
+
   function resetFilters() {
     setCourseTitleQuery('');
-    setDepartmentFilter('');
+    setCoursePage(1);
+  }
+
+  async function refreshPageData() {
+    setUpdateError('');
+    await Promise.all([incompleteQuery.refetch(), employeeTrainingQuery.refetch()]);
+  }
+
+  function retryIncompleteTrainings() {
+    setUpdateError('');
+    return incompleteQuery.refetch();
+  }
+
+  function retryEmployeeTrainingStatuses() {
+    setUpdateError('');
+    return employeeTrainingQuery.refetch();
+  }
+
+  function handleCourseDrawerCloseAutoFocus(event) {
+    event.preventDefault();
+    courseDrawerTriggerRef.current?.focus();
   }
 
   async function handleCompletionChange({ employeeId, courseId, completed }) {
-    const nextUpdatingKey = `${employeeId}-${courseId}`;
+    const checkboxKey = `${employeeId}-${courseId}`;
+
+    if (savingKeysRef.current.has(checkboxKey)) {
+      return;
+    }
+
+    savingKeysRef.current.add(checkboxKey);
+    setSavingKeys(new Set(savingKeysRef.current));
+    setUpdateError('');
+    setUpdateMessage('');
+    let completionSaved = false;
 
     try {
-      setUpdatingKey(nextUpdatingKey);
-      setUpdateError('');
-      await updateTrainingCompletion({ employeeId, courseId, completed });
+      await completionMutation.mutateAsync({ employeeId, courseId, completed });
+      completionSaved = true;
 
-      const [incompleteData, employeeTrainingData] = await Promise.all([
-        fetchIncompleteTrainings(),
-        fetchEmployeeTrainingStatuses(),
+      await Promise.all([
+        queryClient.invalidateQueries(
+          { queryKey: queryKeys.employeeTrainingStatuses, refetchType: 'all' },
+          { throwOnError: true },
+        ),
+        queryClient.invalidateQueries(
+          { queryKey: queryKeys.incompleteTrainings, refetchType: 'all' },
+          { throwOnError: true },
+        ),
+        queryClient.invalidateQueries(
+          { queryKey: queryKeys.dashboard, refetchType: 'all' },
+          { throwOnError: true },
+        ),
       ]);
 
-      setResults(Array.isArray(incompleteData?.results) ? incompleteData.results : []);
-      setEmployeeTrainingStatuses(Array.isArray(employeeTrainingData?.results) ? employeeTrainingData.results : []);
+      setUpdateMessage('수료 상태를 변경했어요. 관련 교육과 대시보드 현황도 갱신했습니다.');
+      toast.success('수료 상태를 변경했어요.');
     } catch (requestError) {
-      setUpdateError('교육 이수 상태를 변경하지 못했습니다. 다시 시도해주세요.');
+      const message = completionSaved
+        ? '수료 상태는 저장됐지만 최신 현황을 불러오지 못했습니다. 다시 새로고침해주세요.'
+        : '수료 상태를 변경하지 못했어요. 다시 시도해주세요.';
+      setUpdateError(message);
+      toast.error(message);
     } finally {
-      setUpdatingKey(null);
+      savingKeysRef.current.delete(checkboxKey);
+      setSavingKeys(new Set(savingKeysRef.current));
     }
   }
 
-  if (isLoading) {
-    return <LoadingView message="미수료자 데이터를 불러오는 중입니다." />;
+  function renderCourseContent() {
+    if (incompleteQuery.isPending) {
+      return (
+        <div role="status">
+          <LoadingView message="교육별 미수료 현황을 불러오는 중…" />
+        </div>
+      );
+    }
+
+    if (incompleteQuery.isError && results.length === 0) {
+      return (
+        <div role="alert">
+          <ErrorView
+            title="교육별 미수료 현황을 불러오지 못했습니다."
+            message="일시적인 문제일 수 있습니다. 잠시 후 다시 시도해주세요."
+            onRetry={retryIncompleteTrainings}
+            isRetrying={incompleteQuery.isFetching}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <section className="toolbar-panel incomplete-toolbar" aria-label="교육별 미수료 필터">
+          <div className="field incomplete-search-field">
+            <div className="search-input-wrap">
+              <svg className="search-input-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-4-4" />
+              </svg>
+              <input
+                type="search"
+                name="courseTitle"
+                autoComplete="off"
+                aria-label="교육명 검색"
+                value={courseTitleQuery}
+                onChange={(event) => setCourseTitleQuery(event.target.value)}
+                placeholder="교육명을 입력하세요"
+              />
+            </div>
+          </div>
+          <button
+            className="action-button action-button--secondary"
+            type="button"
+            disabled={courseTitleQuery.length === 0}
+            onClick={resetFilters}
+          >
+            검색 초기화
+          </button>
+          <button
+            className="action-button"
+            type="button"
+            disabled={isRefreshing}
+            onClick={refreshPageData}
+          >
+            {isRefreshing ? '새로고침 중…' : '미수료자 새로고침'}
+          </button>
+        </section>
+
+        {incompleteQuery.isError ? (
+          <div role="alert">
+            <ErrorView
+              title="교육 현황을 최신 상태로 갱신하지 못했습니다."
+              message="현재 목록과 검색어는 그대로 유지했습니다."
+              onRetry={retryIncompleteTrainings}
+              isRetrying={incompleteQuery.isFetching}
+            />
+          </div>
+        ) : null}
+
+        <section className="dashboard-panel course-status-panel" aria-labelledby="course-status-heading">
+          <div className="course-status-heading">
+            <div className="section-heading">
+              <h2 id="course-status-heading">교육별 미수료 현황</h2>
+              <p>교육별 대상 조건, 미수료 건수, 수료율을 확인합니다.</p>
+            </div>
+            <div className="list-summary" aria-live="polite">
+              전체 {filteredResults.length}개 · {courseRangeStart}–{courseEndIndex}개 표시
+            </div>
+          </div>
+
+          {results.length === 0 ? (
+            <EmptyView message="등록된 교육 미수료 현황이 없습니다." />
+          ) : filteredResults.length === 0 ? (
+            <EmptyView message="검색어에 맞는 교육이 없습니다." />
+          ) : (
+            <>
+              <div className="table-wrap course-status-table-wrap" role="region" aria-label="교육별 미수료 표" tabIndex="0">
+                <table className="data-table course-status-table">
+                  <caption className="visually-hidden">교육별 대상 조건, 미수료 건수와 수료율</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">교육명</th>
+                      <th scope="col">카테고리</th>
+                      <th scope="col">필수·선택</th>
+                      <th scope="col">대상 조건</th>
+                      <th scope="col">미수료</th>
+                      <th scope="col">수료율</th>
+                      <th scope="col">상세</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedCourses.map((course) => {
+                      const completionRate = safeNumber(course.completionRate);
+                      const progressValue = clampPercentage(completionRate);
+
+                      return (
+                        <tr
+                          className={isCourseDrawerOpen && selectedCourseId === course.courseId ? 'is-drawer-selected' : undefined}
+                          key={course.courseId}
+                        >
+                          <th className="course-status-table__title" scope="row">{course.courseTitle}</th>
+                          <td>{course.category ?? '없음'}</td>
+                          <td>
+                            <span className={course.required ? 'status-badge' : 'status-badge status-badge--muted'}>
+                              {displayRequired(course.required)}
+                            </span>
+                          </td>
+                          <td>{displayTarget(course.targetDepartment)} · {displayTarget(course.targetHireType)}</td>
+                          <td><span className="incomplete-count">{safeNumber(course.incompleteCount)}건</span></td>
+                          <td>
+                            <div className="course-completion">
+                              <div
+                                className="completion-meter__track"
+                                role="progressbar"
+                                aria-label={`${course.courseTitle} 수료율`}
+                                aria-valuenow={progressValue}
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                              >
+                                <div className="completion-meter__bar" style={{ width: `${progressValue}%` }} />
+                              </div>
+                              <strong>{completionRate}%</strong>
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              className="text-button"
+                              type="button"
+                              aria-haspopup="dialog"
+                              aria-label={`상세 보기: ${course.courseTitle}`}
+                              aria-pressed={isCourseDrawerOpen && selectedCourseId === course.courseId}
+                              onClick={(event) => {
+                                courseDrawerTriggerRef.current = event.currentTarget;
+                                setSelectedCourseId(course.courseId);
+                                setIsCourseDrawerOpen(true);
+                              }}
+                            >
+                              상세 보기
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="pagination" aria-label="교육 목록 페이지">
+                <button
+                  className="action-button action-button--secondary"
+                  type="button"
+                  disabled={currentCoursePage === 1}
+                  onClick={() => setCoursePage((page) => Math.max(1, page - 1))}
+                >
+                  이전
+                </button>
+                <span aria-live="polite">{currentCoursePage} / {courseTotalPages}</span>
+                <button
+                  className="action-button action-button--secondary"
+                  type="button"
+                  disabled={currentCoursePage === courseTotalPages}
+                  onClick={() => setCoursePage((page) => Math.min(courseTotalPages, page + 1))}
+                >
+                  다음
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+      </>
+    );
   }
 
-  if (error) {
-    return <ErrorView message="미수료자 데이터를 불러오지 못했습니다. 백엔드 서버 상태를 확인해주세요." />;
+  function renderEmployeeContent() {
+    if (employeeTrainingQuery.isPending) {
+      return (
+        <div role="status">
+          <LoadingView message="직원별 이수 상태를 불러오는 중…" />
+        </div>
+      );
+    }
+
+    if (employeeTrainingQuery.isError && employeeTrainingStatuses.length === 0) {
+      return (
+        <div role="alert">
+          <ErrorView
+            title="직원별 이수 상태를 불러오지 못했습니다."
+            message="일시적인 문제일 수 있습니다. 잠시 후 다시 시도해주세요."
+            onRetry={retryEmployeeTrainingStatuses}
+            isRetrying={employeeTrainingQuery.isFetching}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {employeeTrainingQuery.isError ? (
+          <div role="alert">
+            <ErrorView
+              title="직원 교육 상태를 최신 상태로 갱신하지 못했습니다."
+              message="현재 목록은 그대로 유지했습니다."
+              onRetry={retryEmployeeTrainingStatuses}
+              isRetrying={employeeTrainingQuery.isFetching}
+            />
+          </div>
+        ) : null}
+        {updateError ? (
+          <div role="alert">
+            <ErrorView message={updateError} />
+          </div>
+        ) : null}
+        <div className="visually-hidden" role="status" aria-live="polite">
+          {updateMessage}
+        </div>
+        <EmployeeTrainingPanel
+          employees={employeeTrainingStatuses}
+          page={employeePanelPage}
+          onPageChange={setEmployeePanelPage}
+          onCompletionChange={handleCompletionChange}
+          savingKeys={savingKeys}
+          isRefreshing={employeeTrainingQuery.isFetching && !employeeTrainingQuery.isPending}
+        />
+      </>
+    );
   }
 
   return (
-    <section className="page-section">
-      <div className="page-heading">
-        <p className="page-kicker">Incomplete Training</p>
-        <h1>교육 미수료자 자동 추출</h1>
-        <p>교육 과정의 대상 부서와 입사 유형을 기준으로 대상 직원을 찾고, 아직 수료하지 않은 직원을 자동으로 표시합니다.</p>
-      </div>
+    <Dialog.Root open={isCourseDrawerOpen} onOpenChange={setIsCourseDrawerOpen}>
+      <section className="page-section incomplete-page">
+        <div className="page-heading">
+          <h1>교육 현황</h1>
+          <p>교육별 미수료 현황과 직원별 교육 이수 상태를 한 곳에서 확인합니다.</p>
+        </div>
 
-      <section className="toolbar-panel" aria-label="미수료자 필터">
-        <button className="action-button" type="button" onClick={() => loadPageData({ resetSelection: true })}>
-          미수료자 새로고침
-        </button>
-        <label className="field">
-          <span>교육명 검색</span>
-          <input
-            type="search"
-            value={courseTitleQuery}
-            onChange={(event) => setCourseTitleQuery(event.target.value)}
-            placeholder="교육명을 입력하세요"
-          />
-        </label>
-        <label className="field">
-          <span>부서 필터</span>
-          <select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
-            <option value="">전체 부서</option>
-            {departments.map((department) => (
-              <option key={department} value={department}>
-                {department}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="action-button action-button--secondary" type="button" onClick={resetFilters}>
-          필터 초기화
-        </button>
+        <Tabs.Root
+          className="incomplete-tabs"
+          value={activeView}
+          orientation="horizontal"
+          activationMode="manual"
+          onValueChange={handleViewChange}
+        >
+          <Tabs.List className="incomplete-tabs__list" aria-label="교육 현황 보기" ref={tabsListRef}>
+            <span
+              className={`incomplete-tabs__indicator${tabIndicator.ready ? ' is-ready' : ''}`}
+              style={{ transform: `translateX(${tabIndicator.left}px)`, width: `${tabIndicator.width}px` }}
+              aria-hidden="true"
+            />
+            <Tabs.Trigger
+              className="incomplete-tabs__trigger"
+              value="course"
+              ref={(element) => {
+                tabTriggerRefs.current.course = element;
+              }}
+            >
+              교육별 미수료
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              className="incomplete-tabs__trigger"
+              value="employee"
+              ref={(element) => {
+                tabTriggerRefs.current.employee = element;
+              }}
+            >
+              직원별 이수 상태
+            </Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content className="incomplete-tabs__content" value="course">
+            {renderCourseContent()}
+          </Tabs.Content>
+          <Tabs.Content className="incomplete-tabs__content" value="employee">
+            {renderEmployeeContent()}
+          </Tabs.Content>
+        </Tabs.Root>
       </section>
-
-      {results.length === 0 ? (
-        <EmptyView message="교육 미수료 현황이 없습니다." />
-      ) : filteredResults.length === 0 ? (
-        <EmptyView message="필터 조건에 맞는 미수료 현황이 없습니다." />
-      ) : (
-        <>
-          <section className="dashboard-panel">
-            <div className="section-heading">
-              <h2>교육별 미수료 현황</h2>
-              <p>교육별 대상 조건, 미수료자 수, 수료율을 확인합니다.</p>
-            </div>
-            <div className="list-summary">
-              전체 {filteredResults.length}개 중 {courseStartIndex + 1}-{courseEndIndex}개 표시
-            </div>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>교육명</th>
-                    <th>카테고리</th>
-                    <th>필수 여부</th>
-                    <th>대상 부서</th>
-                    <th>대상 입사 유형</th>
-                    <th>대상 직원 수</th>
-                    <th>미수료자 수</th>
-                    <th>수료율</th>
-                    <th>상세</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedCourses.map((course) => (
-                    <tr key={course.courseId}>
-                      <td>{course.courseTitle}</td>
-                      <td>{course.category ?? '없음'}</td>
-                      <td>
-                        <span className={course.required ? 'status-badge' : 'status-badge status-badge--muted'}>
-                          {displayRequired(course.required)}
-                        </span>
-                      </td>
-                      <td>{displayTarget(course.targetDepartment)}</td>
-                      <td>{displayTarget(course.targetHireType)}</td>
-                      <td>{safeNumber(course.targetEmployeeCount)}명</td>
-                      <td>{safeNumber(course.incompleteCount)}명</td>
-                      <td>{safeNumber(course.completionRate)}%</td>
-                      <td>
-                        <button
-                          className="text-button"
-                          type="button"
-                          onClick={() => {
-                            setSelectedCourseId(course.courseId);
-                            setEmployeePage(1);
-                          }}
-                        >
-                          상세 보기
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="pagination">
-              <button
-                className="action-button action-button--secondary"
-                type="button"
-                disabled={currentCoursePage === 1}
-                onClick={() => setCoursePage((page) => Math.max(1, page - 1))}
-              >
-                이전
-              </button>
-              <span>{currentCoursePage} / {courseTotalPages}</span>
-              <button
-                className="action-button action-button--secondary"
-                type="button"
-                disabled={currentCoursePage === courseTotalPages}
-                onClick={() => setCoursePage((page) => Math.min(courseTotalPages, page + 1))}
-              >
-                다음
-              </button>
-            </div>
-          </section>
-
-          <section className="dashboard-panel">
-            <div className="section-heading">
-              <h2>{selectedCourse?.courseTitle ?? '교육 선택'} 미수료 직원</h2>
-              <p>선택한 교육의 미수료 직원 상세 목록입니다.</p>
-            </div>
-
-            {!selectedCourse || selectedEmployees.length === 0 ? (
-              <EmptyView message="이 교육의 미수료자가 없습니다." />
-            ) : (
-              <>
-                <div className="list-summary">
-                  미수료자 {selectedEmployees.length}명 중 {employeeStartIndex + 1}-{employeeEndIndex}명 표시
-                </div>
-                <div className="employee-list">
-                  {pagedEmployees.map((employee) => (
-                    <article className="employee-item" key={employee.employeeId}>
-                      <strong>{employee.name}</strong>
-                      <span>{employee.department}</span>
-                      <span>{employee.position}</span>
-                      <span>{employee.hireType}</span>
-                    </article>
-                  ))}
-                </div>
-                <div className="pagination">
-                  <button
-                    className="action-button action-button--secondary"
-                    type="button"
-                    disabled={currentEmployeePage === 1}
-                    onClick={() => setEmployeePage((page) => Math.max(1, page - 1))}
-                  >
-                    이전
-                  </button>
-                  <span>{currentEmployeePage} / {employeeTotalPages}</span>
-                  <button
-                    className="action-button action-button--secondary"
-                    type="button"
-                    disabled={currentEmployeePage === employeeTotalPages}
-                    onClick={() => setEmployeePage((page) => Math.min(employeeTotalPages, page + 1))}
-                  >
-                    다음
-                  </button>
-                </div>
-              </>
-            )}
-          </section>
-
-          {updateError ? <ErrorView message={updateError} /> : null}
-
-          <EmployeeTrainingPanel
-            employees={employeeTrainingStatuses}
-            page={employeePanelPage}
-            onPageChange={setEmployeePanelPage}
-            onCompletionChange={handleCompletionChange}
-            updatingKey={updatingKey}
-          />
-        </>
-      )}
-    </section>
+      <CourseIncompleteDetail
+        course={selectedCourse}
+        employees={pagedEmployees}
+        startIndex={employeeStartIndex}
+        endIndex={employeeEndIndex}
+        currentPage={currentEmployeePage}
+        totalPages={employeeTotalPages}
+        isLoading={isRefreshing}
+        error={incompleteQuery.error}
+        onRetry={retryIncompleteTrainings}
+        onCloseAutoFocus={handleCourseDrawerCloseAutoFocus}
+        onPageChange={setEmployeePage}
+      />
+    </Dialog.Root>
   );
 }
