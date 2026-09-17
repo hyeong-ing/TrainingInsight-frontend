@@ -22,10 +22,10 @@
 
 ### 🔶 프로젝트 관련 링크
 
-+ [Github (프론트엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-frontend)
-+ [Github (백엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-backend)
++ [GitHub (프론트엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-frontend)
++ [GitHub (백엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-backend)
 + [Blog (프로젝트 기록)](https://post-this.tistory.com/186)
-+ Youtube (동작화면)
++ YouTube (동작화면)
 + [Figma (다이어그램)](https://www.figma.com/board/vqi2iGGbuNM2ncDwadaKBz/Training-Insight?node-id=0-1&t=S5bJFuwvUbhZNjm3-1)
 
 <br/>
@@ -53,21 +53,20 @@ Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록​을 
 <br/>
 
 ### 🔶 기술 스택
-+ 프론트엔드 : JavaScript, React, Vite
-+ 백엔드 : Java 17, Spring Boot
-+ 데이터베이스 : H2 Database
-+ 서버 상태 관리 : TanStack Query
-+ UI/Feedback : Radix UI, Sonner
-+ 테스트 : Vitest, React Testing Library, MSW
-+ AI 개발 : Codex CLI, Sub Agent, Project Skill
++ 프론트엔드 : `JavaScript`, `React`, `Vite`
++ 백엔드 : `Java 17`, `Spring Boot`
++ 데이터베이스 : `H2 Database`
++ 서버 상태 관리 : `TanStack Query`
++ UI/Feedback : `Radix UI`, `Sonner`
++ 테스트 : `Vitest`, `React Testing Library`, `MSW`
++ AI 개발 : `Codex CLI`, `Sub Agent`, `Project Skill`
 
 <br/>
 <br/>
 
 ### 🔶 1차 개발 → 2차 개선
 
-1차 개발을 이후 기존 프로젝트를 다시 검토하면서
-UI 구조뿐 아니라 서버 데이터 관리, 오류 복구, 접근성, 테스트 구조​까지 함께 개선했습니다.
+1차 개발 이후 기존 프로젝트를 다시 검토하면서 UI 구조뿐 아니라 서버 데이터 관리, 오류 복구, 접근성, 테스트 구조​까지 함께 개선했습니다.
 
 | 영역            | 1차 개발                      | 2차 개선                       |
 | ------------- | -------------------------- | --------------------------- |
@@ -125,10 +124,10 @@ TanStack Query를 도입해 서버 데이터를 Query 단위로 관리했습니�
 
 <br/>
 
-##### - Solution
+#### - Solution
 
 검색 요청마다 ID를 부여하고 현재 요청 ID와 일치하는 응답만 화면에 반영하도록 변경했습니다. <br/>
-검색 초기화할 때도 요청 ID를 변경해 이미 진행 중이던 이전 요청이 이후 화면 상태에 영향을 주지 않도록 처리했습니다.
+검색을 초기화할 때도 요청 ID를 변경해 이미 진행 중이던 이전 요청이 이후 화면 상태에 영향을 주지 않도록 처리했습니다.
 
 <br/>
 
