@@ -12,7 +12,8 @@
 
   <br/>
  
-  <img width="800" height="450" alt="image" src="https://github.com/user-attachments/assets/f968f4f7-f6d2-4db3-a36b-4d6514a69fea" />
+  <img width="800" height="450" alt="마법진 로또 웹사이트 팜플렛" src="https://github.com/user-attachments/assets/0c572716-62d5-470a-8c2e-872f61e2aa33" />
+
   
 </p>
 
@@ -25,7 +26,7 @@
 + [GitHub (프론트엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-frontend)
 + [GitHub (백엔드 코드)](https://github.com/hyeong-ing/TrainingInsight-backend)
 + [Blog (프로젝트 기록)](https://post-this.tistory.com/186)
-+ YouTube (동작화면)
++ [YouTube (동작화면)](https://youtu.be/KuHoncTD5Uo?si=8sfNkOZlMfj8DVWL)
 + [Figma (다이어그램)](https://www.figma.com/board/vqi2iGGbuNM2ncDwadaKBz/Training-Insight?node-id=0-1&t=S5bJFuwvUbhZNjm3-1)
 
 <br/>
