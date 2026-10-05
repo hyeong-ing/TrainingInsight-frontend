@@ -12,7 +12,8 @@
 
   <br/>
  
-  <img width="800" height="450" alt="마법진 로또 웹사이트 팜플렛" src="https://github.com/user-attachments/assets/0c572716-62d5-470a-8c2e-872f61e2aa33" />
+  <img width="800" height="450" alt="마법진 로또 웹사이트 팜플렛 (1)" src="https://github.com/user-attachments/assets/73c549fa-486f-4e02-9a82-b99db3f5305c" />
+
 
   
 </p>
