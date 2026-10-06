@@ -39,7 +39,8 @@ Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록을 기
 
 <p align="center">
   
-  <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/719521e0-02f2-4ae9-bbaf-774d40c53aa1" />
+  <img width="800" height="500" alt="스크린샷 2026-10-06 오후 6 09 06" src="https://github.com/user-attachments/assets/f613247a-43ad-41c3-96b0-efefede6d7a0" />
+
 
 </p>
 
