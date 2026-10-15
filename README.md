@@ -1,3 +1,4 @@
+
 # 👥 Training Insight 📊
 
 <br/>
@@ -11,9 +12,8 @@
   <br/>
 
   <br/>
- 
-  <img width="800" height="450" alt="마법진 로또 웹사이트 팜플렛 (1)" src="https://github.com/user-attachments/assets/73c549fa-486f-4e02-9a82-b99db3f5305c" />
-
+  
+  <img width="800" height="450" alt="마법진 로또 웹사이트 팜플렛 (1)" src="https://github.com/user-attachments/assets/691bc4e3-7436-412b-8e04-2cf9dfeee795" />
 
   
 </p>
@@ -39,7 +39,8 @@ Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록을 기
 
 <p align="center">
   
-  <img width="800" height="500" alt="스크린샷 2026-10-06 오후 6 09 06" src="https://github.com/user-attachments/assets/f613247a-43ad-41c3-96b0-efefede6d7a0" />
+  <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/719521e0-02f2-4ae9-bbaf-774d40c53aa1" />
+  <img width="800" height="500" alt="스크린샷 2026-10-06 오후 6 09 06" src="https://github.com/user-attachments/assets/bc336b10-fd78-4d0e-b278-a644c24507ae" />
 
 
 </p>
@@ -51,7 +52,7 @@ Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록을 기
 + 직원의 부서와 입사 유형에 맞는 대상 교육을 자동으로 판별합니다.
 + 체크박스로 직원의 교육 이수 상태를 변경합니다.
 + 문장으로 입력한 검색어에서 부서, 입사 유형, 필수 여부 등을 찾아 교육 조건을 검색합니다.
-+ 이 기능은 실제 AI 모델을 호출하지 않고, 미리 정한 키워드 규칙으로 조건을 만드는 Fake AI로 구현했습니다.
++ 이 기능은 실제 AI 모델을 호출하지 않고 미리 정한 키워드 규칙으로 조건을 만드는 Fake AI로 구현했습니다.
 
 <br/>
 <br/>
@@ -101,7 +102,7 @@ Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록을 기
 #### - Solution
 
 TanStack Query를 도입해 서버 데이터를 Query 단위로 관리했습니다. <br/>
-교육 이수 상태 변경이 성공하면 관련된 세 Query의 데이터를 다시 확인하도록 표시하고, 최신 데이터를 조회하게 했습니다. 이 처리를 Query 무효화라고 합니다.
+교육 이수 상태 변경이 성공하면 관련된 세 Query의 데이터를 다시 확인하도록 표시하고 최신 데이터를 조회하게 했습니다.
 
 `교육 이수 상태 변경 → PATCH 성공 → 관련 Query 무효화 → 최신 데이터 재조회`
 
@@ -248,6 +249,6 @@ AI가 수정한 결과를 직접 확인하는 것에서 끝내지 않고 주요 
 
 ### 🔶 실행 방법
 
-+ 이 저장소 폴더에서 `npm install` 후 `npm run dev`를 실행합니다.
-+ 실제 데이터를 확인하려면 백엔드도 함께 실행해야 합니다.
-+ 테스트는 `npm test`, 빌드는 `npm run build`로 확인할 수 있습니다.
++ Java 17 환경에서 이 저장소 폴더의 `./gradlew bootRun`을 실행합니다.
++ 화면을 확인하려면 프론트엔드도 별도로 실행해야 합니다.
++ 테스트는 `./gradlew test`로 확인할 수 있습니다.
