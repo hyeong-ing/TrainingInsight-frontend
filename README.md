@@ -1,5 +1,5 @@
 
-# 👥 Training Insight 📊
+# 👥 Training Insights 📊
 
 <br/>
 
@@ -34,7 +34,7 @@
 <br/>
 
 ### 🔶 프로젝트 설명
-Training Insight는 직원의 부서, 입사 유형, 교육 이수 기록을 기준으로 HR 담당자가 교육 현황과 미수료자를 관리할 수 있도록 만든 서비스입니다. <br/>
+Training Insights는 직원의 부서, 입사 유형, 교육 이수 기록을 기준으로 HR 담당자가 교육 현황과 미수료자를 관리할 수 있도록 만든 서비스입니다. <br/>
 <br/>
 
 <p align="center">
